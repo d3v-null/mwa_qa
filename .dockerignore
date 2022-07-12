@@ -1,0 +1,9 @@
+build/*
+dist/*
+*.egg-info
+*/__pycache__/*
+mwa_qa/data/*
+mwa_qa/tests/*
+data/*
+.git/*
+.venv/*
