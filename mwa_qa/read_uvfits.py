@@ -62,8 +62,9 @@ class UVfits(object):
             self.obsid = vis_hdu.header["OBJECT"]
             self.channel_width = vis_hdu.header['CDELT4']
 
-            # self.time_array = np.float64(vis_hdu.data["DATE"])
-            # self.unique_times = np.sort(np.unique(self.time_array))
+            self.time_array = np.float64(vis_hdu.data["DATE"]) # dev needs this
+            self.unique_times = np.sort(np.unique(self.time_array)) # dev needs this
+
             self.Ntimes = int(len(self.ant_1_array) / self.Nbls)
             self.freq_array = make_fits_axis_array(vis_hdu, 4)
             self.Nchan = len(self.freq_array)
