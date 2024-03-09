@@ -28,15 +28,11 @@ class UVfits(object):
             vis_hdu = hdus['PRIMARY']
 
             # get the data array
-            self.data_array = vis_hdu.data['DATA']
-            if self.data_array.ndim == 7:  # tweak of ska additional column
-                self.data_array = vis_hdu.data['DATA'][:, 0, 0, 0, :,
-                                                       :, 0] + 1j * vis_hdu.data['DATA'][:, 0, 0, 0, :, :, 1]
-                self.weights_array = vis_hdu.data['DATA'][:, 0, 0, 0, :, :, 2]
-            else:
-                self.data_array = vis_hdu.data['DATA'][:, 0, 0, :,
-                                                       :, 0] + 1j * vis_hdu.data['DATA'][:, 0, 0, :, :, 1]
-                self.weights_array = vis_hdu.data['DATA'][:, 0, 0, :, :, 2]
+            # which is either [blt, X, X, X, chan, pol, imag] or [blt, X, X, chan, pol, imag]
+            while len(data.shape) > 6:
+                data = data[:, 0, ...]
+            self.data_array = data[..., 0] + 1j * data[..., 1]
+            self.weights_array = data[..., 2]
             # the uvfits baseline of each row in the timestep-baseline axis
             try:
                 # MWA Observations
@@ -86,6 +82,13 @@ class UVfits(object):
                 self.antenna_numbers = ant_hdu.data.field("NOSTA")
             self.antenna_positions = ant_hdu.data.field("STABXYZ")
             self.Nants = len(self.ant_names)
+            # fix for pyuvdata antenna numbering
+            if np.max(self.antenna_numbers) - 1 > self.Nants:
+                self.antenna_numbers = np.arange(self.Nants)
+                ant_hdu = hdus['AIPS AN']
+                ant_hdu.data.field("NOSTA")[:] = self.antenna_numbers
+                hdus.writeto(self.uvfits_path, overwrite=True)
+
 
     def debug(self):
         print(
@@ -120,24 +123,24 @@ class UVfits(object):
 
     def data_for_antpair(self, antpair):
         """
-        dimensions: [time, freq, pol]
+        dimensions: [time, bl, freq, pol]
         """
         return self._data_for_antpairs([antpair])
-
+    
     def data_for_antpairs(self, antpairs):
-        Npairs = len(antpairs)
-        result = self._data_for_antpairs(antpairs)
-        return result.reshape(
-            (self.Ntimes, Npairs, self.Nchan, self.Npols))
-
-    def _flag_for_antpairs(self, vis_hdu, antpairs, weight_limit=0):
         """
         dimensions: [time, bl, freq, pol]
         """
-        Npairs = len(antpairs)
-        result = self._data_for_antpairs(antpairs)
-        return result.reshape(
-            (self.Ntimes, Npairs, self.Nchan, self.Npols))
+        self._data_for_antpairs(antpairs)
+
+    def _flag_for_antpairs(self, antpairs, weight_limit=0):
+        """
+        dimensions: [blt, freq, pol]
+        """
+        blt_idxs = np.sort(np.concatenate([
+            self.blt_idxs_for_antpair(antpair) for antpair in antpairs]))
+        # weights are clauculate (1/PFB_GAINS * Nf * Nt)
+        return self.weights_array[blt_idxs, :, :] <= weight_limit
 
     def _flag_for_antpairs(self, antpairs, weight_limit=0):
         """
