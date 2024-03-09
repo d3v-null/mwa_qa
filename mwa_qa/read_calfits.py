@@ -84,11 +84,14 @@ class CalFits(object):
         "calibration solutions found, choose a different tile"
 
     def _iterate_refant(self):
-        anindex = -1
-        while anindex < 0:
+        nants = self.gain_array.shape[1]
+        anindex = nants
+        while anindex > 0:
+            anindex -= 1
+            if np.isnan(self.gain_array[:, anindex, :]).all():
+                continue
             if self.antenna_flags[anindex] == 0:
                 break
-            anindex -= 1
         return self.antenna[anindex]
 
     def gains_ind_for(self, antnum):
