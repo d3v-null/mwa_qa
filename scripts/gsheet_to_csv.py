@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from argparse import ArgumentParser
 import gspread
 from google.oauth2.service_account import Credentials
