@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python
 from argparse import ArgumentParser
 from mycolorpy import colorlist as mcp
 import numpy as np

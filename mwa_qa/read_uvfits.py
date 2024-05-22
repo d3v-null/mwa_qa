@@ -29,6 +29,7 @@ class UVfits(object):
 
             # get the data array
             # which is either [blt, X, X, X, chan, pol, imag] or [blt, X, X, chan, pol, imag]
+            data = vis_hdu.data['DATA']
             while len(data.shape) > 6:
                 data = data[:, 0, ...]
             self.data_array = data[..., 0] + 1j * data[..., 1]
@@ -131,7 +132,7 @@ class UVfits(object):
         """
         dimensions: [time, bl, freq, pol]
         """
-        self._data_for_antpairs(antpairs)
+        return self._data_for_antpairs(antpairs)
 
     def _flag_for_antpairs(self, antpairs, weight_limit=0):
         """
