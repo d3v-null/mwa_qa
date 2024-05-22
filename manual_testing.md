@@ -63,6 +63,17 @@ plot_imgqa.py \
     --save --out "${results_dir}/wsclean_hyp_${obsid}_30l_src4k_8s_80kHz-MFS_img_metrics"
 ```
 
+extra
+
+```bash
+mkdir -p /cygnus/dev/intfro/nfdata/1340271944/test_results/
+run_calqa.py \
+    /cygnus/dev/intfro/nfdata/1340271944/cal/hyp_soln_1340271944_30l_src4k_300it.fits \
+    /cygnus/dev/intfro/nfdata/1340271944/raw/1340271944.metafits \
+    --pol X \
+    --out /cygnus/dev/intfro/nfdata/1340271944/test_results/hyp_soln_1340271944_30l_src4k_300it_X.json
+```
+
 ## Push
 
 ```bash
