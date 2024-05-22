@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from argparse import ArgumentParser
 from pathlib import Path
 from mwa_qa.prepvis_metrics import PrepvisMetrics

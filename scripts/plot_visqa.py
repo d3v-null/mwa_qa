@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from argparse import ArgumentParser
 from mwa_qa import json_utils as ut
 from matplotlib import cm
