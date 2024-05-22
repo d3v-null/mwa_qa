@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from sklearn.neighbors import NearestNeighbors
 from kneed import KneeLocator
 from sklearn.cluster import DBSCAN
