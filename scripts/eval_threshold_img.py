@@ -34,18 +34,22 @@ def read_wsstats(wsfile, obsids):
     df = pd.read_csv(wsfile, sep='\t')
     obs = np.unique(np.array(df['OBS']))
     inds = common_indices(obs, obsids)
-    return np.array(df['LST DEG'])[inds], np.array(df['CONFIG'])[inds]
+    return np.array(df['LST DEG'])[inds], np.array(df['CONF'])[inds]
 
+
+thresh_index=[
+    "V RMS BOX NOSUB",
+    "PKS INT RATIO VXXYY NOSUB",
+    "PKS INT DIFF XXYY SUB",
+    "XX PKS0023_026 INT SUB RATIO",
+    "YY PKS0023_026 INT SUB RATIO"
+]
 
 def evaluate_threshold(ewp, df):
     # calculating IQR (interquartile range)
 
     outdata = []
-    for i, fl in enumerate(["V RMS BOX NOSUB",
-                            "PKS INT RATIO VXXYY NOSUB",
-                            "PKS INT DIFF XXYY SUB",
-                            "XX PKS0023_026 INT SUB RATIO",
-                            "YY PKS0023_026 INT SUB RATIO"]):
+    for i, fl in enumerate(thresh_index):
 
         if args.per_pointing:
             outdict = {}
@@ -70,22 +74,52 @@ def evaluate_threshold(ewp, df):
             outdata.append(outdict)
 
     if args.per_pointing:
-        df_out = pd.DataFrame(data=outdata)
+        df_out = pd.DataFrame(data=outdata, index=thresh_index)
 
     else:
-        df_out = pd.DataFrame(outdata, index=["V RMS BOX NOSUB",
-                                              "PKS INT RATIO VXXYY NOSUB",
-                                              "PKS INT DIFF XXYY SUB",
-                                              "XX PKS0023_026 INT SUB RATIO",
-                                              "YY PKS0023_026 INT SUB RATIO"],
+        df_out = pd.DataFrame(outdata, index=thresh_index,
                               columns=['Lthresh', 'Uthresh'])
 
     return df_out
 # plotting
 
 
+import matplotlib.pyplot as plt 
+from matplotlib import colormaps, colors
+import numpy as np
+import warnings
+
+def gen_color(cmap,n,reverse=False):
+    '''Generates n distinct color from a given colormap.
+
+    Args:
+        cmap(str): The name of the colormap you want to use.
+            Refer https://matplotlib.org/stable/tutorials/colors/colormaps.html to choose
+            Suggestions:
+            For Metallicity in Astrophysics: Use coolwarm, bwr, seismic in reverse
+            For distinct objects: Use gnuplot, brg, jet,turbo.
+
+        n(int): Number of colors you want from the cmap you entered.
+
+        reverse(bool): False by default. Set it to True if you want the cmap result to be reversed.
+
+    Returns: 
+        colorlist(list): A list with hex values of colors.
+    '''
+    c_map = colormaps.get_cmap(str(cmap)) # select the desired cmap
+    arr=np.linspace(0,1,n) #create a list with numbers from 0 to 1 with n items
+    colorlist=list()
+    for c in arr:
+        rgba=c_map(c) #select the rgba value of the cmap at point c which is a number between 0 to 1
+        clr=colors.to_hex(rgba) #convert to hex
+        colorlist.append(str(clr)) # create a list of these colors
+    
+    if reverse==True:
+        colorlist.reverse()
+    return colorlist
+
 def plot_imgqa(dfm, df_out, ewp, figname=None):
-    colors = mcp.gen_color(cmap='rainbow', n=len(ewp))
+    colors = gen_color(cmap='rainbow', n=len(ewp))
     labels = [r'$V_{rms}\, (unsub)$',
               r'$\frac{S_{V}}{(S_{EW} + S_{NS})}$',
               r'Diff $(S_{EW} , S_{NS})$',
@@ -178,73 +212,55 @@ def plot_imgqa(dfm, df_out, ewp, figname=None):
     else:
         pylab.show()
 
+def get_sub_mask(df):
+    """
+    get indices for unsub metrics
+    """
+    names = np.unique(df['IMG NAME'])
+    sub_names = [name for name in names if 'sub' in name.lower()]
+    assert len(sub_names) == 1, 'Only one sub image is allowed'
+    sub_name = sub_names[0]
+    return np.array(df['IMG NAME'] == sub_name)
 
-df = pd.read_csv(args.tsvfile, sep='\t')
-df.dropna(axis=0, how='all', inplace=True)
-df.dropna(axis=1, how='all', inplace=True)
-obsids = np.unique(np.array(df['OBS']))
-config = np.array(df['CONF'])
+def get_metrics_df(args):
+    df = pd.read_csv(args.tsvfile, sep='\t')
+    df.dropna(axis=0, how='all', inplace=True)
+    df.dropna(axis=1, how='all', inplace=True)
+    
+    sub_mask = get_sub_mask(df)
+    common_cols = ['V RMS BOX', 'XX PKS0023_026 INT', 'YY PKS0023_026 INT', 'V PKS0023_026 INT']
+    df_unsub = df.iloc[~sub_mask][['OBS', 'CONF', 'EWP'] + common_cols]
+    df_sub = df.iloc[sub_mask][['OBS'] + common_cols]
+    
+    dfm = pd.merge(df_unsub, df_sub, on='OBS', suffixes=(' NOSUB', ' SUB'))
+    
+    for sub in ['NOSUB', 'SUB']:
+        if {f"XX PKS0023_026 INT {sub}", f"YY PKS0023_026 INT {sub}"}.issubset(set(dfm.columns)):
+            dfm[f'PKS INT DIFF XXYY {sub}'] = np.abs(
+                dfm[f'XX PKS0023_026 INT {sub}'] - dfm[f'YY PKS0023_026 INT {sub}'])
+            if {f"V PKS0023_026 INT {sub}"}.issubset(set(dfm.columns)):
+                dfm[f'PKS INT RATIO VXXYY {sub}'] = dfm[f'V PKS0023_026 INT {sub}'] / (
+                    dfm[f'XX PKS0023_026 INT {sub}'] + dfm[f'XX PKS0023_026 INT {sub}'])
 
-img_obs = df['OBS']
-img_ewp = df['EWP']
-img_rms = df['V RMS BOX']
-img_pksxx = df['XX PKS0023_026 INT']
-img_pksyy = df['YY PKS0023_026 INT']
-img_pksv = df['V PKS0023_026 INT']
+        for pol in ['XX', 'YY', 'V']:
+            if {f"{pol} PKS0023_026 INT {sub}", f"{pol} PKS0023_026 INT NOSUB"}.issubset(set(dfm.columns)):
+                dfm[f'{pol} PKS0023_026 INT {sub} RATIO'] = dfm[f'{pol} PKS0023_026 INT {sub}'] / \
+                    dfm[f'{pol} PKS0023_026 INT NOSUB']
+    print(dfm)
+    return dfm
 
-# nosub
-img_obs_nsub = np.array(img_obs)[1::2]
-img_ewp_nsub = np.array(img_ewp)[1::2]
-img_rms_nsub = np.array(img_rms)[1::2]
-img_pksxx_nsub = np.array(img_pksxx)[1::2]
-img_pksyy_nsub = np.array(img_pksyy)[1::2]
-img_pksv_nsub = np.array(img_pksv)[1::2]
-config_nsub = config[1::2]
-
-# sub
-img_obs_sub = np.array(img_obs)[0::2]
-img_ewp_sub = np.array(img_ewp)[0::2]
-img_rms_sub = np.array(img_rms)[0::2]
-img_pksxx_sub = np.array(img_pksxx)[0::2]
-img_pksyy_sub = np.array(img_pksyy)[0::2]
-img_pksv_sub = np.array(img_pksv)[0::2]
-config_nsub = config[0::2]
-
-metrics_dict = {'OBSID': img_obs_nsub,
-                'EWP': img_ewp_nsub,
-                'CONFIG': config_nsub,
-                'V RMS BOX NOSUB': img_rms_nsub,
-                'XX PKS0023_026 INT NOSUB': img_pksxx_nsub,
-                'XX PKS0023_026 INT SUB': img_pksxx_sub,
-                'YY PKS0023_026 INT NOSUB': img_pksyy_nsub,
-                'YY PKS0023_026 INT SUB': img_pksyy_sub,
-                'V PKS0023_026 INT NOSUB': img_pksv_nsub,
-                'V PKS0023_026 INT SUB': img_pksv_sub,
-                }
-
-dfm = pd.DataFrame(data=metrics_dict)
-
-for sub in ['NOSUB', 'SUB']:
-    if {f"XX PKS0023_026 INT {sub}", f"YY PKS0023_026 INT {sub}"}.issubset(set(dfm.columns)):
-        dfm[f'PKS INT DIFF XXYY {sub}'] = np.abs(
-            dfm[f'XX PKS0023_026 INT {sub}'] - dfm[f'YY PKS0023_026 INT {sub}'])
-        if {f"V PKS0023_026 INT {sub}"}.issubset(set(dfm.columns)):
-            dfm[f'PKS INT RATIO VXXYY {sub}'] = dfm[f'V PKS0023_026 INT {sub}'] / (
-                dfm[f'XX PKS0023_026 INT {sub}'] + dfm[f'XX PKS0023_026 INT {sub}'])
-
-    for pol in ['XX', 'YY', 'V']:
-        if {f"{pol} PKS0023_026 INT {sub}", f"{pol} PKS0023_026 INT NOSUB"}.issubset(set(dfm.columns)):
-            dfm[f'{pol} PKS0023_026 INT {sub} RATIO'] = dfm[f'{pol} PKS0023_026 INT {sub}'] / \
-                dfm[f'{pol} PKS0023_026 INT NOSUB']
+dfm = get_metrics_df(args)
 
 if args.outfile is None:
     outfile = args.tsvfile.replace('.tsv', '_thresholds.tsv')
 else:
     outfile = args.outfile
+    
+dfm.to_csv(outfile, sep='\t', index=False)
 
 # splitting into configuration
 # phase I
-df_ph1 = dfm.iloc[np.where(dfm['CONFIG'] == 'Phase I')]
+df_ph1 = dfm.iloc[np.where(dfm['CONF'] == 'Phase I')]
 ewp_ph1 = np.unique(df_ph1['EWP'])
 df_out_ph1 = evaluate_threshold(ewp_ph1, df_ph1)
 
@@ -259,7 +275,7 @@ else:
     df_out_ph1.to_csv(outfile.replace('.tsv', '_PH1.tsv'),
                       index=False, sep='\t')
 # phase II
-df_ph2 = dfm.iloc[np.where(dfm['CONFIG'] == 'Phase II Compact')]
+df_ph2 = dfm.iloc[np.where(dfm['CONF'] == 'Phase II Compact')]
 ewp_ph2 = np.unique(df_ph2['EWP'])
 df_out_ph2 = evaluate_threshold(ewp_ph2, df_ph2)
 
@@ -273,3 +289,27 @@ if args.per_pointing:
 else:
     df_out_ph2.to_csv(outfile.replace('.tsv', '_PH2.tsv'),
                       index=False, sep='\t')
+
+
+for phase, df_out, ewps in [
+        ("ph1", df_out_ph1, ewp_ph1), 
+        ("ph2", df_out_ph2, ewp_ph2),
+]:
+    for ewp in ewps:
+        print(f"Thresholds for {phase} {ewp=}")
+        thresh = df_out.loc["V RMS BOX NOSUB", ewp]
+        print(f"    filter_max_vrms_box_nosub={thresh[1]:6.4f}")
+        print(f"    filter_min_vrms_box_nosub={thresh[0]:6.4f}")
+        thresh = df_out.loc["PKS INT RATIO VXXYY NOSUB", ewp]
+        print(f"    filter_max_pks_int_v_ratio_nosub={thresh[1]:6.4f}")
+        print(f"    filter_min_pks_int_v_ratio_nosub={thresh[0]:6.4f}")
+        thresh = df_out.loc["PKS INT DIFF XXYY SUB", ewp]
+        print(f"    filter_max_pks_int_diff_sub={thresh[1]:6.4f}")
+        print(f"    filter_min_pks_int_diff_sub={thresh[0]:6.4f}")
+        thresh = df_out.loc["XX PKS0023_026 INT SUB RATIO", ewp]
+        print(f"    filter_max_pks_int_sub_ratio_xx={thresh[1]:6.4f}")
+        print(f"    filter_min_pks_int_sub_ratio_xx={thresh[0]:6.4f}")
+        thresh = df_out.loc["YY PKS0023_026 INT SUB RATIO", ewp]
+        print(f"    filter_max_pks_int_sub_ratio_yy={thresh[1]:6.4f}")
+        print(f"    filter_min_pks_int_sub_ratio_yy={thresh[0]:6.4f}")
+        print("")
