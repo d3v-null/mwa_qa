@@ -1,5 +1,5 @@
 # Our image is based on Debian bullseye
-FROM debian:bullseye
+FROM python:3.11-bookworm
 
 # Set for all apt-get install, must be at the very beginning of the Dockerfile.
 ENV DEBIAN_FRONTEND noninteractive
@@ -32,14 +32,14 @@ RUN apt-get -y update; \
 # use python3 as the default python
 RUN update-alternatives --install /usr/bin/python python /usr/bin/python3 1
 
-# copy the repository into the container in the /app directory
-ADD . /app
-WORKDIR /app
+# copy the repository into the container in the /mwa_qa directory
+ADD . /mwa_qa
+WORKDIR /mwa_qa
 
 # install other python reqs
-RUN pip install -r requirements.txt
+# RUN pip install -r requirements.txt
 
 # install the python module in the container
-RUN python setup.py install
+RUN python -m pip install .
 
 ENTRYPOINT bash
