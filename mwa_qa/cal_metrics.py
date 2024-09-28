@@ -34,6 +34,7 @@ class CalMetrics(object):
                         If the last antenna is flagged, it will return
                         an error.
         """
+        warnings.filterwarnings("ignore")
         self.calfits_path = calfits_path
         self.metafits_path = metafits_path
         self.CalFits = CalFits(calfits_path,
@@ -111,7 +112,6 @@ class CalMetrics(object):
 
     def receiver_metrics(self):
         # metrics based on antennas connected to receivers
-        warnings.filterwarnings("ignore")
         pols = list(pol_dict.keys())
         ntimes = self.CalFits.Ntime
         receivers = np.unique(self.MetaFits.receiver_ids)

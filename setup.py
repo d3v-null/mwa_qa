@@ -14,7 +14,7 @@ setup_args = {
     'install_requires': [
         'astropy>3.0.0',
         'kneed==0.8.5',
-        'matplotlib>=2.2,<=3.7.5',
+        'matplotlib==3.9.0',
         'numpy==1.24.4',
         'pandas==2.0.3',
         'pytest',

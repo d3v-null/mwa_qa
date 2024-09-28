@@ -5,6 +5,7 @@ from collections import OrderedDict
 import numpy as np
 import pylab
 import itertools
+import warnings
 
 pol_dict = {'XX': 0, 'YY': 1, 'XY': 2, 'YX': 3}
 
@@ -19,7 +20,8 @@ def converter(input_list, output_list):
 
 
 class PrepvisMetrics(object):
-    def __init__(self, uvfits_path, metafits_path, ex_annumbers=[], edge_flagging=None, antenna_flags=False, cutoff_threshold=3, niter=10):
+    def __init__(self, uvfits_path, metafits_path, ex_annumbers=[], edge_flagging=True, antenna_flags=False, cutoff_threshold=3, niter=10):
+        warnings.filterwarnings("ignore")
         self.uvfits_path = uvfits_path
         self.metafits_path = metafits_path
         self.uvf = UVfits(self.uvfits_path)

@@ -3,6 +3,7 @@ from mwa_qa import json_utils as ju
 from collections import OrderedDict
 from scipy import stats
 import numpy as np
+import warnings
 
 pol_dict = {'XX': 0, 'YY': 1, 'XY': 2, 'YX': 3}
 
@@ -32,6 +33,7 @@ def search_group(red_pairs, antp):
 
 class VisMetrics(object):
     def __init__(self, uvfits_path, cutoff_threshold=3.5):
+        warnings.filterwarnings("ignore")
         self.uvfits_path = uvfits_path
         self.uvf = UVfits(uvfits_path)
         self.cutoff_threshold = cutoff_threshold
