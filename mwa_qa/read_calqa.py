@@ -25,6 +25,7 @@ class CalQA(object):
             self.pol_keys = list(self.metrics['YY'].keys())
         else:
             warnings.warn('No polarization keys found')
+        warnings.filterwarnings("ignore")
         self.nchan = self.metrics['NCHAN']
         self.start_freq = self.metrics['START_FREQ']
         self.ch_width = self.metrics['CH_WIDTH']
