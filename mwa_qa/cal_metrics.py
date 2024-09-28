@@ -97,6 +97,8 @@ class CalMetrics(object):
         return len(inds) / len(self.CalFits.antenna_flags) * 100
 
     def non_converging_percent(self):
+        if np.all(np.isnan(self.CalFits.gain_array)):
+            return 100
         sh = self.CalFits.convergence.shape
         count = 0
         for t in range(sh[0]):
@@ -159,7 +161,7 @@ class CalMetrics(object):
           should be 4-dimensional (ntime,nbls, nfreqs, npols)
         - baseline_lengths: numpy.ndarray containing the basline lengths in ascending order
           matching the same ordering as the gain array
-        -resolution: Binning resolution. Default is set to 10.       
+        -resolution: Binning resolution. Default is set to 10.
         """
         bin_edges = np.arange(np.min(baseline_lengths),  np.max(
             baseline_lengths) + resolution, resolution)
