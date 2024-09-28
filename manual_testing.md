@@ -63,6 +63,13 @@ plot_imgqa.py \
     --save --out "${results_dir}/wsclean_hyp_${obsid}_30l_src4k_8s_80kHz-MFS_img_metrics"
 ```
 
+test calqa with a dead fits
+
+```bash
+run_calqa.py hyp_soln_1324134624.fits 1324134624.metafits --pol X --out hyp_soln_1324134624_X.json
+jq -r '.PERCENT_NONCONVERGED_CHS' hyp_soln_1324134624_X.json # should be 100
+```
+
 extra
 
 ```bash
