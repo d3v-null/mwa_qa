@@ -22,7 +22,10 @@ class Metafits(object):
             self.ha = hdr['HA']
             self.az_alt = (hdr['AZIMUTH'], hdr['ALTITUDE'])
             self.pointing_centre = (hdr['RA'], hdr['DEC'])
-            self.phase_centre = (hdr['RAPHASE'], hdr['DECPHASE'])
+            try:
+                self.phase_centre = (hdr['RAPHASE'], hdr['DECPHASE'])
+            except KeyError:
+                self.phase_centre = self.pointing_centre
             self.filename = hdr['FILENAME']
             self.start_gpstime = hdr['GPSTIME']
             self.exposure = hdr['EXPOSURE']
