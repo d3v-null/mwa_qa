@@ -1,6 +1,7 @@
 from collections import OrderedDict
 from astropy.io import fits
 import numpy as np
+import warnings
 
 
 class Metafits(object):
@@ -42,8 +43,12 @@ class Metafits(object):
             self._check_data(tdata)
             tdata = tdata[self.pol_index(tdata)::2]
             self.delays = tdata['Delays']
-            self.dipole_gains = tdata['Calib_Gains']
-            self.antenna_positions = np.array(
+            try:
+				self.dipole_gains = tdata['Calib_Gains']
+            except KeyError:
+				warnings.warn('No key "Calib_Gains." Ignoring')
+				pass
+			self.antenna_positions = np.array(
                 [tdata['East'], tdata['North'], tdata['Height']]).T
             self.antenna_numbers = tdata['Antenna']
             self.antenna_names = tdata['TileName']
