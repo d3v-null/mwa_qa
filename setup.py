@@ -17,6 +17,7 @@ setup_args = {
         'matplotlib==3.9.0',
         'numpy>=1.23',
         'pandas>=2.0.3',
+        'PyYAML',
         'pytest',
         'python_dateutil>=2.6.0',
         'seaborn',

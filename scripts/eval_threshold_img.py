@@ -83,43 +83,32 @@ def evaluate_threshold(ewp, df):
     return df_out
 # plotting
 
-
-import matplotlib.pyplot as plt 
-from matplotlib import colormaps, colors
-import numpy as np
-import warnings
-
-def gen_color(cmap,n,reverse=False):
-    '''Generates n distinct color from a given colormap.
-
-    Args:
-        cmap(str): The name of the colormap you want to use.
-            Refer https://matplotlib.org/stable/tutorials/colors/colormaps.html to choose
-            Suggestions:
-            For Metallicity in Astrophysics: Use coolwarm, bwr, seismic in reverse
-            For distinct objects: Use gnuplot, brg, jet,turbo.
-
-        n(int): Number of colors you want from the cmap you entered.
-
-        reverse(bool): False by default. Set it to True if you want the cmap result to be reversed.
-
-    Returns: 
-        colorlist(list): A list with hex values of colors.
-    '''
-    c_map = colormaps.get_cmap(str(cmap)) # select the desired cmap
-    arr=np.linspace(0,1,n) #create a list with numbers from 0 to 1 with n items
-    colorlist=list()
-    for c in arr:
-        rgba=c_map(c) #select the rgba value of the cmap at point c which is a number between 0 to 1
-        clr=colors.to_hex(rgba) #convert to hex
-        colorlist.append(str(clr)) # create a list of these colors
-    
-    if reverse==True:
-        colorlist.reverse()
-    return colorlist
-
 def plot_imgqa(dfm, df_out, ewp, figname=None):
-    colors = gen_color(cmap='rainbow', n=len(ewp))
+    if len(dfm) == 0:
+        return
+    try:
+        colors = mcp.gen_color(cmap='rainbow', n=len(ewp))
+    except Exception as exc:
+        import matplotlib.pyplot as plt 
+        from matplotlib import colormaps, colors
+        import numpy as np
+        import warnings
+
+        def gen_color(cmap,n,reverse=False):
+            '''Generates n distinct color from a given colormap.'''
+            c_map = colormaps.get_cmap(str(cmap)) # select the desired cmap
+            arr=np.linspace(0,1,n) #create a list with numbers from 0 to 1 with n items
+            colorlist=list()
+            for c in arr:
+                rgba=c_map(c) #select the rgba value of the cmap at point c which is a number between 0 to 1
+                clr=colors.to_hex(rgba) #convert to hex
+                colorlist.append(str(clr)) # create a list of these colors
+            
+            if reverse==True:
+                colorlist.reverse()
+            return colorlist
+        colors = gen_color('rainbow', n=len(ewp))
+    
     labels = [r'$V_{rms}\, (unsub)$',
               r'$\frac{S_{V}}{(S_{EW} + S_{NS})}$',
               r'Diff $(S_{EW} , S_{NS})$',
@@ -263,7 +252,6 @@ dfm.to_csv(outfile, sep='\t', index=False)
 df_ph1 = dfm.iloc[np.where(dfm['CONF'] == 'Phase I')]
 ewp_ph1 = np.unique(df_ph1['EWP'])
 df_out_ph1 = evaluate_threshold(ewp_ph1, df_ph1)
-
 if args.plot:
     figure_name = args.tsvfile.replace('.tsv', '_imgqa_dist_PH1.png')
     plot_imgqa(df_ph1, df_out_ph1, ewp_ph1, figure_name)
@@ -273,12 +261,11 @@ if args.per_pointing:
         '.tsv', '_PH1.tsv'), index=False, sep='\t')
 else:
     df_out_ph1.to_csv(outfile.replace('.tsv', '_PH1.tsv'),
-                      index=False, sep='\t')
+                    index=False, sep='\t')
 # phase II
 df_ph2 = dfm.iloc[np.where(dfm['CONF'] == 'Phase II Compact')]
 ewp_ph2 = np.unique(df_ph2['EWP'])
 df_out_ph2 = evaluate_threshold(ewp_ph2, df_ph2)
-
 if args.plot:
     figure_name = args.tsvfile.replace('.tsv', '_imgqa_dist_PH2.png')
     plot_imgqa(df_ph2, df_out_ph2, ewp_ph2, figure_name)
@@ -288,13 +275,15 @@ if args.per_pointing:
         '.tsv', '_PH2.tsv'), index=False, sep='\t')
 else:
     df_out_ph2.to_csv(outfile.replace('.tsv', '_PH2.tsv'),
-                      index=False, sep='\t')
+                    index=False, sep='\t')
 
 
 for phase, df_out, ewps in [
         ("ph1", df_out_ph1, ewp_ph1), 
         ("ph2", df_out_ph2, ewp_ph2),
 ]:
+    if len(df_out) == 0:
+        continue
     for ewp in ewps:
         print(f"Thresholds for {phase} {ewp=}")
         thresh = df_out.loc["V RMS BOX NOSUB", ewp]

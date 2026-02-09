@@ -1,13 +1,16 @@
+astropy>3.0.0
+cthulhu
+gspread
+kneed==0.8.5
+matplotlib>=2.2,<=3.7.5
+mycolorpy
+numpy==1.24.4
+pandas==2.0.3
+PyYAML
 pytest
 pytest-cov
 pytest-randomly
-astropy
-matplotlib
-numpy
-pandas
 scipy
 seaborn
+setuptools<60  # https://github.com/pyodide/pyodide/issues/2971
 six
-cthulhu
-gspread
-kneed

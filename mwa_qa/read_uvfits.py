@@ -117,8 +117,10 @@ class UVfits(object):
         """
         Npairs = len(antpairs)
         # sorted to traverse in the order on disk to minimize seeks
-        blt_idxs = np.sort(np.concatenate([
-            self.blt_idxs_for_antpair(antpair) for antpair in antpairs]))
+        blt_idxs = [
+            self.blt_idxs_for_antpair(antpair) for antpair in antpairs
+        ]
+        blt_idxs = np.sort(np.concatenate(blt_idxs))
         return self.data_array[blt_idxs].reshape(
             (self.Ntimes, Npairs, self.Nchan, self.Npols))
 
@@ -127,7 +129,7 @@ class UVfits(object):
         dimensions: [time, bl, freq, pol]
         """
         return self._data_for_antpairs([antpair])
-    
+
     def data_for_antpairs(self, antpairs):
         """
         dimensions: [time, bl, freq, pol]
