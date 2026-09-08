@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, dev]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # the trimmed observation the manual_testing.md flows run against. The full
+  # one is mwa_qa_1226233968.zip in the same bucket, 13 GB, which will not fit
+  # on a hosted runner.
+  FIXTURE_URL: https://projects.pawsey.org.au/mwa-qa/mwa_qa_fixture_1226233968.zip
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.11']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -e .
+
+      # the fixture is ~100 MB and changes rarely, so it is worth keeping
+      - name: Cache demo fixture
+        id: fixture-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mwa_qa
+          key: mwa-qa-fixture-${{ hashFiles('.github/workflows/ci.yml') }}
+
+      - name: Fetch demo fixture
+        if: steps.fixture-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/.cache/mwa_qa
+          curl -fsSL "$FIXTURE_URL" -o ~/.cache/mwa_qa/fixture.zip
+          unzip -q -o ~/.cache/mwa_qa/fixture.zip -d ~/.cache/mwa_qa
+          rm ~/.cache/mwa_qa/fixture.zip
+
+      - name: Test
+        env:
+          MPLBACKEND: Agg
+        run: |
+          # the fixture unpacks as <cache>/1226233968/{prep,raw,cal,img}.
+          # point this at a full observation instead to run the same tests
+          # against real-sized data.
+          export MWA_QA_DEMO_DATA="$HOME/.cache/mwa_qa"
+          pytest mwa_qa/tests -v --cov=mwa_qa --cov-report=term-missing
+
+  docker:
+    # only publish once the tests have actually passed
+    needs: test
+    if: github.event_name == 'push' && github.repository == 'd3v-null/mwa_qa'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: d3vnull0/mwa_qa
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

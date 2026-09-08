@@ -119,3 +119,27 @@ rclone copy mwa_qa_${obsid}.zip mwaeor:mwa-qa/ --progress
 cd -
 ```
 
+
+## Automated tests
+
+`mwa_qa/tests/test_manual_testing.py` runs everything above through the
+console scripts. The full observation is 18 GB, so CI uses a trimmed fixture
+(a few timesteps and one coarse channel, ~100 MB) published next to it:
+
+```bash
+pytest mwa_qa/tests            # downloads the fixture on first run
+MWA_QA_DEMO_DATA=/data/dev pytest mwa_qa/tests   # use a full obs instead
+MWA_QA_NO_DOWNLOAD=1 pytest mwa_qa/tests         # skip anything needing data
+```
+
+Regenerate and republish the fixture after changing what the tests need:
+
+```bash
+export obsid=1226233968
+scripts/make_demo_fixture.py /data/dev/${obsid} /tmp/fixture/${obsid} --obsid ${obsid}
+( cd /tmp/fixture && zip -qr /tmp/mwa_qa_fixture_${obsid}.zip ${obsid} )
+rclone copy /tmp/mwa_qa_fixture_${obsid}.zip mwaeor:mwa-qa/ --progress
+```
+
+Both live in the same bucket, served at
+`https://projects.pawsey.org.au/mwa-qa/`.
