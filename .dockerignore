@@ -2,8 +2,8 @@ build/*
 dist/*
 *.egg-info
 */__pycache__/*
-mwa_qa/data/*
-mwa_qa/tests/*
-data/*
+mwa_qa/data/*.fits
+mwa_qa/data/*.uvfits
+mwa_qa/data/*.metafits
 .git/*
 .venv/*

@@ -9,7 +9,7 @@ setup_args = {
     'license':      'BSD',
     'version':      "0.0.0-dev",
     'description':  'MWA Data Quality Analysis.',
-    'packages':     ['mwa_qa'],
+    'packages':     ['mwa_qa', 'mwa_qa.data', 'mwa_qa.tests'],
     'package_dir':  {'mwa_qa': 'mwa_qa'},
     'install_requires': [
         'astropy>3.0.0',
