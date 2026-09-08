@@ -33,6 +33,18 @@ run_prepvisqa.py \
 plot_prepvisqa.py \
     "${results_dir}/birli_${obsid}_prepvis_metrics.json" --save \
     --out "${results_dir}/birli_${obsid}_prepvis_metrics_modz.png"
+# prepvis qa, scoring tiles within cable flavour groups instead of against the
+# whole array. use this when a flavour's signal-path gain differs from the
+# majority's, which otherwise flags that whole flavour as outliers.
+run_prepvisqa.py \
+    "${data_dir}/${obsid}/prep/birli_${obsid}_2s_40kHz.uvfits" \
+    "${data_dir}/${obsid}/raw/${obsid}.metafits" \
+    --cable_flavor \
+    --out "${results_dir}/birli_${obsid}_prepvis_metrics_cableflavor.json"
+# per-flavour outliers, and the flavour each tile belongs to
+jq -r '.XX | to_entries[] | select((.value|type) == "object" and (.value.BAD_ANTS|type) == "array")
+    | "\(.key)\t\(.value.BAD_ANTS)"' \
+    "${results_dir}/birli_${obsid}_prepvis_metrics_cableflavor.json"
 # cal qa
 run_calqa.py \
     "${data_dir}/${obsid}/cal/hyp_soln_${obsid}_30l_src4k.fits" \
@@ -86,3 +98,24 @@ run_calqa.py \
 ```bash
 docker push d3vnull0/mwa_qa:latest
 ```
+
+## Package test data
+
+```bash
+export obsid=1226233968
+export data_dir=/data/dev
+cd "${data_dir}/${obsid}"
+zip -r mwa_qa_${obsid}.zip \
+    prep/birli_${obsid}_2s_40kHz.uvfits \
+    raw/${obsid}.metafits \
+    cal/hyp_soln_${obsid}_30l_src4k.fits \
+    raw/${obsid}.metafits \
+    cal/hyp_${obsid}_30l_src4k_8s_80kHz.uvfits \
+    img/wsclean_hyp_${obsid}_30l_src4k_8s_80kHz-MFS-V-dirty.fits \
+    img/wsclean_hyp_${obsid}_30l_src4k_8s_80kHz-MFS-XX-dirty.fits \
+    img/wsclean_hyp_${obsid}_30l_src4k_8s_80kHz-MFS-YY-dirty.fits
+rclone mkdir mwaeor:mwa-qa
+rclone copy mwa_qa_${obsid}.zip mwaeor:mwa-qa/ --progress
+cd -
+```
+

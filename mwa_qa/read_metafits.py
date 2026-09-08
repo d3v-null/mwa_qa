@@ -32,6 +32,10 @@ class Metafits(object):
             self.integration = hdr['INTTIME']
             self.obs_time = hdr['DATE-OBS']
             self.Nchans = hdr['NCHANS']
+            # oversampled coarse channels do not have the sharp band edges or
+            # the centre-channel artefact, so they must not be edge flagged.
+            # Absent on legacy metafits, which are never oversampled.
+            self.oversampled = bool(hdr.get('OVERSAMP', 0))
             coarse_ch = hdr['CHANNELS']
             start = float(coarse_ch.split(',')[0]) * 1.28
             stop = float(coarse_ch.split(',')[-1]) * 1.28
