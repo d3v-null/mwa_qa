@@ -147,6 +147,38 @@ def test_prepvisqa_small_groups_are_unscored_but_dead_tiles_still_flagged(
         len(metrics['BAD_ANTS'])
 
 
+def test_prepvisqa_flag_tsv(demo_data, obsid, results_dir):
+    """Every flagged tile says why, and the tsv agrees with the metrics."""
+    import csv
+
+    metrics = results_dir / 'flags.json'
+    run('run_prepvisqa.py', prep_uvfits(demo_data, obsid),
+        metafits(demo_data, obsid), '--group_by', 'auto', '--save_flags',
+        '--out', metrics)
+    tsv = results_dir / 'flags_flags.tsv'
+    assert tsv.exists()
+
+    rows = list(csv.DictReader(tsv.open(), delimiter='\t'))
+    stats = json.loads(metrics.read_text())
+    assert len(rows) == stats['NANTS'] * 2          # one row per tile per pol
+    assert {r['POL'] for r in rows} == {'XX', 'YY'}
+
+    for pol in ('XX', 'YY'):
+        flagged = sorted(int(r['ANT']) for r in rows
+                         if r['POL'] == pol and r['FLAGGED'] == 'True')
+        assert flagged == sorted(stats[pol]['BAD_ANTS']), pol
+    combined = sorted({int(r['ANT']) for r in rows if r['FLAGGED'] == 'True'})
+    assert combined == sorted(stats['BAD_ANTS'])
+
+    # a flag is only useful if it says what tripped it
+    assert all(r['REASON'] != 'ok' and r['DETAIL']
+               for r in rows if r['FLAGGED'] == 'True')
+    assert all(r['REASON'] == 'ok'
+               for r in rows if r['FLAGGED'] == 'False')
+    assert {r['REASON'] for r in rows} <= {
+        'ok', 'metafits_flag', 'flag_occupancy', 'mod_zscore', 'low_rms'}
+
+
 def test_plot_prepvisqa(demo_data, obsid, results_dir):
     metrics = results_dir / 'prep.json'
     run('run_prepvisqa.py', prep_uvfits(demo_data, obsid),

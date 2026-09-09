@@ -40,6 +40,8 @@ parser.add_argument('--min_group_size', type=int, default=MIN_GROUP_SIZE,
 parser.add_argument('--dead_rms_threshold', type=float, default=DEAD_RMS_THRESHOLD,
                     help='Tiles in a group too small to score are still flagged below this RMS. '
                          'Default %(default)s.')
+parser.add_argument('--save_flags', action='store_true', default=None, required=False,
+                    help='Also write a tsv of every tile with whether it was flagged and why')
 parser.add_argument('--save_spectra', action='store_true', default=None, required=False,
                     help='Also write per-channel spectra (.npz) for plot_prepvis_groups.py')
 
@@ -52,6 +54,9 @@ m.run_metrics(split_autos=args.split, cable_flavor=args.cable_flavor,
               group_by=args.group_by, min_group_size=args.min_group_size,
               dead_rms_threshold=args.dead_rms_threshold)
 m.write_to(args.out)
+if args.save_flags:
+    flags_out = None if args.out is None else args.out.replace('.json', '_flags.tsv')
+    print('wrote', m.write_flags(flags_out))
 if args.save_spectra:
     spectra_out = None if args.out is None else args.out.replace('.json', '_spectra.npz')
     print('wrote', m.write_spectra(spectra_out))

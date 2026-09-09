@@ -421,6 +421,30 @@ class PrepvisMetrics(object):
                 count += 1
         return modz_dict, converter(bad_inds, [])
 
+    def _modz_flag_details(self, modz_dict, threshold):
+        """
+        Position within the scored set -> (iteration, score) it first exceeded
+        the threshold at. iterative_mod_zscore only returns which positions
+        were flagged, but which round a tile went in tells you whether it was
+        an obvious outlier or only crossed once others had been removed.
+        """
+        details = {}
+        for key in sorted(modz_dict, key=lambda k: int(k)):
+            scores = np.asarray(modz_dict[key], dtype=float)
+            for i in np.where(np.abs(scores) > threshold)[0]:
+                if int(i) not in details:
+                    details[int(i)] = (int(key), float(scores[i]))
+        return details
+
+    def _record_flags(self, pol, inds, reason, detail=None):
+        """Note why each antenna was flagged, for the flag tsv."""
+        for n, ind in enumerate(np.atleast_1d(inds)):
+            ind = int(ind)
+            if ind in self._flag_reasons[pol]:
+                continue
+            self._flag_reasons[pol][ind] = (
+                reason, '' if detail is None else detail[n])
+
     def _initialize_metrics_dict(self):
         self.metrics = OrderedDict()
         self.metrics['NANTS'] = self.uvf.Nants
@@ -466,6 +490,8 @@ class PrepvisMetrics(object):
                 self.metrics['GROUP_SELECTION'] = scores
             if group_by != 'none':
                 group_labels = self.grouping_labels(group_by, min_group_size)
+        self._flag_reasons = {'XX': {}, 'YY': {}}
+        metafits_flagged = set(self.flags_from_metafits())
         self.metrics['GROUP_BY'] = group_by or 'none'
         if group_labels is not None:
             self.metrics['GROUPS'] = group_labels
@@ -478,10 +504,18 @@ class PrepvisMetrics(object):
         # finding misbehaving antennas
         for p in ['XX', 'YY']:
             bad_ants = []
-            _, bd_inds = self.flag_occupancy(
+            percent_gddata, bd_inds = self.flag_occupancy(
                 autos_amps_norm[:, :, pol_dict[p]])
             if len(bd_inds) > 0:
                 bad_ants.append(self.metrics['ANNUMBERS'][bd_inds])
+            for ind in np.atleast_1d(bd_inds[0] if isinstance(bd_inds, tuple)
+                                     else bd_inds):
+                ind = int(ind)
+                self._record_flags(
+                    p, [ind],
+                    'metafits_flag' if ind in metafits_flagged
+                    else 'flag_occupancy',
+                    ['%.1f%% usable channels' % percent_gddata[ind]])
             autos_amps_norm[bd_inds, :, pol_dict[p]] = np.nan
             # calculating root mean square
             rms = self.calculate_rms(
@@ -495,6 +529,16 @@ class PrepvisMetrics(object):
                     autos_amps_norm[second, :, pol_dict[p]], threshold=self.cutoff_threshold, niter=self.niter)
                 bd_inds = np.append(np.array(first)[bd_inds_first],
                                     np.array(second)[bd_inds_second])
+                for half, modz_half in (('FIRST', modz_dict_first),
+                                        ('SECOND', modz_dict_second)):
+                    positions = first if half == 'FIRST' else second
+                    details = self._modz_flag_details(
+                        modz_half, self.cutoff_threshold)
+                    self._record_flags(
+                        p, [positions[i] for i in details], 'mod_zscore',
+                        ['modz %+.2f at iteration %d within %s'
+                         % (score, iteration, half)
+                         for iteration, score in details.values()])
                 # bd_inds_flatten = np.array(bd_inds)
                 self.metrics[p]['MODZ_SCORE'] = {}
                 self.metrics[p]['MODZ_SCORE']['FIRST'] = modz_dict_first
@@ -523,6 +567,11 @@ class PrepvisMetrics(object):
                         self.metrics[p][group]['BAD_ANTS'] = \
                             self.metrics['ANNUMBERS'][dead_inds]
                         self.metrics[p][group]['UNSCORED'] = True
+                        self._record_flags(
+                            p, dead_inds, 'low_rms',
+                            ['rms %.3f below %.3g, group too small to score'
+                             % (np.asarray(rms)[i], dead_rms_threshold)
+                             for i in dead_inds])
                         bd_inds = np.append(bd_inds, dead_inds)
                         continue
                     modz_dict, bd_inds_group = self.iterative_mod_zscore(
@@ -535,6 +584,14 @@ class PrepvisMetrics(object):
                     self.metrics[p][group]['MODZ_SCORE'] = modz_dict
                     self.metrics[p][group]['BAD_ANTS'] = \
                         self.metrics['ANNUMBERS'][inds[bd_inds_group]]
+                    details = self._modz_flag_details(
+                        modz_dict, self.cutoff_threshold)
+                    self._record_flags(
+                        p, [inds[i] for i in details],
+                        'mod_zscore',
+                        ['modz %+.2f at iteration %d within %s'
+                         % (score, iteration, group)
+                         for iteration, score in details.values()])
                     combined_modz[inds] = modz_dict[0]
                     bd_inds = np.append(bd_inds, inds[bd_inds_group])
                 bd_inds = np.unique(bd_inds).astype(int)
@@ -546,6 +603,12 @@ class PrepvisMetrics(object):
                 modz_dict, bd_inds = self.iterative_mod_zscore(
                     autos_amps_norm[:, :, pol_dict[p]], threshold=self.cutoff_threshold, niter=self.niter)
                 bd_inds = np.array(bd_inds)
+                details = self._modz_flag_details(
+                    modz_dict, self.cutoff_threshold)
+                self._record_flags(
+                    p, list(details), 'mod_zscore',
+                    ['modz %+.2f at iteration %d' % (score, iteration)
+                     for iteration, score in details.values()])
                 self.metrics[p]['MODZ_SCORE'] = modz_dict
             if len(bd_inds) > 0:
                 bad_ants.append(self.metrics['ANNUMBERS'][bd_inds])
@@ -571,6 +634,61 @@ class PrepvisMetrics(object):
             outfile = self.uvfits_path.replace(
                 '.uvfits', '_prepvis_metrics.json')
         ju.write_metrics(self.metrics, outfile)
+
+    def flag_table(self):
+        """
+        One row per tile per polarisation, saying whether it was flagged and
+        which rule did it. Long form so that rows from many observations can
+        just be concatenated.
+        """
+        names = self._meta_column_for_antennas(self.meta.antenna_names)
+        flavours = self.cable_flavors()
+        families = self.antenna_families()
+        receivers = self._meta_column_for_antennas(self.meta.receiver_ids)
+        groups = self.metrics.get('GROUPS')
+        annumbers = np.asarray(self.metrics['ANNUMBERS'])
+        obsid = self.metrics.get('OBSID', '')
+        rows = []
+        for p in ['XX', 'YY']:
+            rms = np.asarray(self.metrics[p]['RMS'], dtype=float)
+            modz = self.metrics[p].get('MODZ_SCORE', {})
+            # iteration 0 is the score before anything was removed, which is
+            # the one worth comparing between tiles
+            first = np.asarray(modz.get(0, modz.get('0', [])), dtype=float)
+            for i, annumber in enumerate(annumbers):
+                reason, detail = self._flag_reasons[p].get(i, ('', ''))
+                rows.append([
+                    obsid,
+                    int(annumber),
+                    str(names[i]).strip(),
+                    p,
+                    str(groups[i]) if groups is not None else 'ALL',
+                    str(flavours[i]),
+                    str(families[i]),
+                    'Rx%s' % receivers[i],
+                    '%.4f' % rms[i] if i < len(rms) else '',
+                    '%+.3f' % first[i] if i < len(first)
+                    and np.isfinite(first[i]) else '',
+                    'True' if reason else 'False',
+                    reason or 'ok',
+                    detail,
+                ])
+        return rows
+
+    FLAG_TABLE_HEADER = ['OBSID', 'ANT', 'TILE', 'POL', 'GROUP', 'FLAVOUR',
+                         'FAMILY', 'RX', 'RMS', 'MODZ', 'FLAGGED', 'REASON',
+                         'DETAIL']
+
+    def write_flags(self, outfile=None):
+        """Write flag_table() as a tsv next to the metrics."""
+        if outfile is None:
+            outfile = self.uvfits_path.replace(
+                '.uvfits', '_prepvis_flags.tsv')
+        with open(outfile, 'w') as f:
+            f.write('\t'.join(self.FLAG_TABLE_HEADER) + '\n')
+            for row in self.flag_table():
+                f.write('\t'.join(str(v) for v in row) + '\n')
+        return outfile
 
     def write_spectra(self, outfile=None):
         """
