@@ -451,7 +451,15 @@ class PrepvisMetrics(object):
         self.metrics['NTIMES'] = self.uvf.Ntimes
         self.metrics['NCHAN'] = self.uvf.Nchan
         self.metrics['NPOLS'] = self.uvf.Npols
-        self.metrics['OBSID'] = self.uvf.obsid
+        # the uvfits OBJECT header is meant to be the obsid but sometimes holds
+        # a field name, e.g. low_2026A_2461238_EOR0_EOR0_Ch121, which would make
+        # OBSID collide across every observation of that field. the metafits
+        # GPSTIME is unambiguous, so prefer it and keep OBJECT for traceability.
+        object_name = str(self.uvf.obsid).strip()
+        gpstime = getattr(self.meta, 'start_gpstime', None)
+        self.metrics['OBSID'] = str(gpstime) if gpstime is not None \
+            else object_name
+        self.metrics['OBJECT'] = object_name
         # fine channels per 1.28 MHz coarse channel, so plots can mark the
         # coarse channel boundaries without re-reading the metafits
         self.metrics['NCHANS_PER_COARSE'] = int(

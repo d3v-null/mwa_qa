@@ -47,6 +47,27 @@ def test_prepvisqa(demo_data, obsid, results_dir):
     assert set(metrics['BAD_ANTS']) <= set(metrics['ANNUMBERS'])
 
 
+def test_prepvisqa_obsid_is_the_gps_obsid(demo_data, obsid, results_dir):
+    """
+    The uvfits OBJECT header sometimes holds a field name rather than an
+    obsid, which would make OBSID collide across every observation of that
+    field. It has to come from the metafits instead.
+    """
+    out = results_dir / 'obsid.json'
+    run('run_prepvisqa.py', prep_uvfits(demo_data, obsid),
+        metafits(demo_data, obsid), '--save_flags', '--out', out)
+    metrics = json.loads(out.read_text())
+    assert metrics['OBSID'] == obsid
+    assert metrics['OBSID'].isdigit()
+    # whatever OBJECT said is kept, but is not what identifies the observation
+    assert 'OBJECT' in metrics
+
+    import csv
+    rows = list(csv.DictReader((results_dir / 'obsid_flags.tsv').open(),
+                               delimiter='\t'))
+    assert {r['OBSID'] for r in rows} == {obsid}
+
+
 def test_prepvisqa_edge_flagging_follows_oversampling(demo_data, obsid,
                                                       results_dir):
     """A legacy observation is edge flagged; an oversampled one is not."""
