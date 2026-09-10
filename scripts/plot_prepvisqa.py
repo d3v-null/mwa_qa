@@ -2,6 +2,7 @@
 from argparse import ArgumentParser
 from mwa_qa import json_utils as ut
 from matplotlib import cm
+import re
 import matplotlib as mpl
 import numpy as np
 import pylab
@@ -12,6 +13,19 @@ mpl.rcParams['font.weight'] = 'bold'
 mpl.rcParams['axes.labelweight'] = 'bold'
 mpl.rcParams['axes.titleweight'] = 'bold'
 mpl.rcParams['figure.titleweight'] = 'bold'
+
+
+def obsid_from(metrics, path):
+    """
+    The gps obsid. metrics['OBSID'] comes from the uvfits OBJECT header, which
+    on some observations holds a field name rather than an obsid, so a 10 digit
+    run in the filename is preferred when that happens.
+    """
+    obsid = str(metrics.get('OBSID', '')).strip()
+    if obsid.isdigit():
+        return obsid
+    found = re.search(r'\d{10}', os.path.basename(path))
+    return found.group(0) if found else (obsid or 'unknown')
 
 
 def get_indices(array1, array2):
@@ -41,20 +55,16 @@ poor_ants_xx = metrics['XX']['BAD_ANTS']
 poor_ants_yy = metrics['YY']['BAD_ANTS']
 poor_ants_xx_inds = get_indices(antennas, poor_ants_xx)
 poor_ants_yy_inds = get_indices(antennas, poor_ants_yy)
-obsid = metrics['OBSID']
+obsid = obsid_from(metrics, args.json)
 threshold = metrics['THRESHOLD']
-if args.title:
-    titlename = args.title
-
-elif len(obsid.split('_')) == 1:
-    titlename = obsid
-else:
-    titlename = ''.join(filter(str.isdigit, os.path.basename(args.json)))
+titlename = args.title or obsid
 
 # plotting RMS
 fig = pylab.figure(figsize=(7, 5))
 fig.suptitle(titlename, size=13)
 ax = pylab.subplot(111)
+ax.set_title('RMS over frequency of each tile\'s time-averaged autocorrelation,\n'
+             'divided by the array median. circled = flagged', size=8.5)
 ax.scatter(antennas, metrics['XX']['RMS'], marker='.',
            color='dodgerblue', s=100, alpha=0.8, label='XX')
 ax.scatter(antennas, metrics['YY']['RMS'], marker='.',
@@ -88,6 +98,9 @@ else:
 fig = pylab.figure(figsize=(7, 5))
 fig.suptitle(titlename, size=13)
 ax = pylab.subplot(111)
+ax.set_title('modified z-score of each tile against the others it is compared with,\n'
+             'before any outlier is removed. shaded = beyond the cutoff of %g' % threshold,
+             size=8.5)
 if 'FIRST' in metrics['XX']['MODZ_SCORE'].keys():
     ax.scatter(metrics['ANNUMBERS_FIRST'], metrics['XX']['MODZ_SCORE']['FIRST']['0'], marker='.',
                color='dodgerblue', s=100, alpha=0.8, label='XX')

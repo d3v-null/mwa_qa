@@ -18,6 +18,7 @@ import matplotlib as mpl
 import numpy as np
 import os
 import pylab
+import re
 
 mpl.rcParams['axes.linewidth'] = 1.5
 mpl.rcParams['font.weight'] = 'bold'
@@ -28,6 +29,19 @@ mpl.rcParams['figure.titleweight'] = 'bold'
 # assigned in a fixed order so a group keeps its colour between observations
 COLORS = ['#eb6834', '#2a78d6', '#1baf7a', '#eda100',
           '#e87ba4', '#008300', '#4a3aa7', '#e34948']
+
+
+def obsid_from(metrics, path):
+    """
+    The gps obsid. metrics['OBSID'] comes from the uvfits OBJECT header, which
+    on some observations holds a field name rather than an obsid, so a 10 digit
+    run in the filename is preferred when that happens.
+    """
+    obsid = str(metrics.get('OBSID', '')).strip()
+    if obsid.isdigit():
+        return obsid
+    found = re.search(r'\d{10}', os.path.basename(path))
+    return found.group(0) if found else (obsid or 'unknown')
 
 
 def group_colors(groups):
@@ -95,7 +109,9 @@ def plot_xxyy(metrics, groups, colors, title, args):
     ax.set_aspect('equal')
     ax.set_xlabel('XX auto RMS')
     ax.set_ylabel('YY auto RMS')
-    ax.set_title('filled = flagged; band is XX = YY within 25%', size=10)
+    ax.set_title('each tile\'s auto RMS in one polarisation against the other, coloured by group.\n'
+                 'distance off the dashed line is polarisation asymmetry; filled = flagged',
+                 size=8.5)
     ax.grid(ls='dotted')
     ax.legend(fontsize=8, loc='upper left')
     ax.tick_params(labelsize=10, direction='in', length=4, width=2)
@@ -127,7 +143,10 @@ def plot_spectra(metrics, groups, colors, spectra, title, args):
     step = max(int(np.ceil(len(bounds) / 8.0)), 1)
     fig, axes = pylab.subplots(len(ordered), 2, figsize=(13, 2.1 * len(ordered)),
                                sharex=True, sharey=False, squeeze=False)
-    fig.suptitle(title + '        bold = flagged', size=13)
+    fig.suptitle(title, size=13, y=0.995)
+    fig.text(0.5, 0.963, "per-channel RMS over time of each tile's autocorrelation, divided by "
+             'the array median, one row per group. bold = flagged',
+             ha='center', size=8.5)
     for row, group in enumerate(ordered):
         inds = np.where(groups == group)[0]
         for col, (pol, ip) in enumerate([('XX', 0), ('YY', 1)]):
@@ -164,7 +183,7 @@ def plot_spectra(metrics, groups, colors, spectra, title, args):
         hi = max(axes[row][c].get_ylim()[1] for c in (0, 1))
         for c in (0, 1):
             axes[row][c].set_ylim(lo, hi)
-    fig.tight_layout(rect=[0, 0, 1, 0.97])
+    fig.tight_layout(rect=[0, 0, 1, 0.945])
     finish(fig, outname(args.figname, 'spectra') or
            args.json.replace('.json', '_spectra.png'), args)
 
@@ -190,11 +209,9 @@ groups = np.array([str(g) for g in metrics.get(
     'GROUPS', ['ALL'] * len(annumbers))])
 colors = group_colors(groups)
 
-obsid = str(metrics.get('OBSID', ''))
-name = obsid if len(obsid.split('_')) == 1 else ''.join(
-    filter(str.isdigit, os.path.basename(args.json)))
+obsid = obsid_from(metrics, args.json)
 title = args.title or '%s   group_by=%s   %d/%d flagged' % (
-    name, metrics.get('GROUP_BY', 'none'),
+    obsid, metrics.get('GROUP_BY', 'none'),
     len(np.atleast_1d(metrics['BAD_ANTS'])), metrics['NANTS'])
 
 plot_xxyy(metrics, groups, colors, title, args)
